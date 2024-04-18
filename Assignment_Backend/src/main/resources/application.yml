@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: parsing
+  datasource:
+    url: jdbc:postgresql://localhost:5432/assignmentTask
+    username: postgres
+    password: root
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+aws:
+  s3:
+    bucketName: "filestoreforassignment"
+  accessKey: <YOUR ACCESS KEY HERE>
+  secretKey: <YOUR SECRET KEY HERE>
