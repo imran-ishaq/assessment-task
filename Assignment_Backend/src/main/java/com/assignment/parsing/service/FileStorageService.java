@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -109,29 +110,32 @@ public class FileStorageService {
                 deviceRepository.save(event.getDevice());
             }
             eventRepository.save(event);
-            return fileDetailsRepository.save(new FileDetails(key,event.getId()));
+            return fileDetailsRepository.save(new FileDetails(key,event.getId(),"https://"+bucketName+".s3.amazonaws.com/"+key));
         } catch (IOException e) {
-            e.printStackTrace();
-            return null;
+            return fileDetailsRepository.save(new FileDetails(key, (long) -1,"https://"+bucketName+".s3.amazonaws.com/"+key));
         }
     }
     public Event getFileData(Long id){
         Optional<FileDetails> file = fileDetailsRepository.findById(id.intValue());
         if(file.isPresent()){
-            Event res = new Event();
-            Optional<Event> event = eventRepository.findById(file.get().getEvent_id());
-            if(event.isPresent()){
-                res.setId(event.get().getId());
-                res.setCompany(event.get().getCompany());
-                res.setDevice(event.get().getDevice());
-                res.setLocation(event.get().getLocation());
-                res.setDevice_type(event.get().getDevice_type());
-                res.setEvent_type(event.get().getEvent_type());
-                res.setEvent_data(event.get().getEvent_data());
-                res.getEvent_data().setGateways(null);
-                res.getEvent_data().setPayload(null);
+            if(file.get().getEvent_id()!=-1){
+                Event res = new Event();
+                Optional<Event> event = eventRepository.findById(file.get().getEvent_id());
+                if(event.isPresent()){
+                    res.setId(event.get().getId());
+                    res.setCompany(event.get().getCompany());
+                    res.setDevice(event.get().getDevice());
+                    res.setLocation(event.get().getLocation());
+                    res.setDevice_type(event.get().getDevice_type());
+                    res.setEvent_type(event.get().getEvent_type());
+                    res.setEvent_data(event.get().getEvent_data());
+                    res.getEvent_data().setGateways(null);
+                    res.getEvent_data().setPayload(null);
+                }
+                return res;
+            }else{
+                return null;
             }
-            return res;
         }
         return null;
     }
