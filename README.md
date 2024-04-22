@@ -7,10 +7,10 @@ This repository contains an implementation of a File Management System, develope
 ## Features
 
 - **S3 Integration**: Files are stored in an S3 bucket for efficient and scalable storage.
-- **File Download**: The system provides functionality to download files from the S3 bucket.
+- **File Download**: The system provides functionality to fetch files from the S3 bucket.
 - **File Parsing**: After downloading, the system parses the files to extract relevant information.
 - **PostgreSQL Integration**: Parsed data is stored in a PostgreSQL database for structured querying and retrieval.
-- **Frontend UI**: Displays files in the frontend UI with correct JSON format.
+- **Frontend UI**: Displays file data in the frontend UI of only files with correct JSON format.
 
 ## Technology Stack
 
