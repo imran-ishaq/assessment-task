@@ -1,7 +1,6 @@
 package com.assignment.parsing.controller;
 
 import com.assignment.parsing.entity.Event;
-import com.assignment.parsing.entity.EventData;
 import com.assignment.parsing.entity.FileDetails;
 import com.assignment.parsing.service.FileStorageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +33,7 @@ public class FileController {
         return fileStorageService.getFileDetails();
     }
     @GetMapping("/data/{id}")
-    public Event getFileDetails(@PathVariable("id") Long id) {
+    public Event getFileData(@PathVariable("id") Long id) {
         return fileStorageService.getFileData(id);
     }
 }
