@@ -2,6 +2,10 @@ package com.assignment.parsing.service;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
+import com.assignment.parsing.dto.EventDTO;
+import com.assignment.parsing.dto.EventDataDTO;
+import com.assignment.parsing.dto.GatewayDTO;
+import com.assignment.parsing.dto.SensorReadingDTO;
 import com.assignment.parsing.entity.*;
 import com.assignment.parsing.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,10 +18,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class FileStorageService {
@@ -50,7 +52,12 @@ public class FileStorageService {
     }
 
     public void storeFile(MultipartFile file) throws IOException {
-        s3Client.putObject(bucketName,file.getOriginalFilename(), this.convertMultiPartToFile(file));
+        File tempFile = this.convertMultiPartToFile(file);
+        try {
+            s3Client.putObject(bucketName, file.getOriginalFilename(), tempFile);
+        } finally {
+            tempFile.delete();
+        }
     }
     private File convertMultiPartToFile(MultipartFile file) throws IOException {
         File convFile = new File(Objects.requireNonNull(file.getOriginalFilename()));
@@ -67,13 +74,19 @@ public class FileStorageService {
             if (!s3ObjectSummariesList.isEmpty()) {
                 for (S3ObjectSummary objectSummary : s3ObjectSummariesList) {
                     String key = objectSummary.getKey();
-                    files.add(downloadAndMapEntities(bucketName,key));
+                    Date objectSummaryLastModified = objectSummary.getLastModified();
+                    Optional<FileDetails> fileAlreadyExist = fileDetailsRepository.findLatestByName(key);
+                    if(fileAlreadyExist.isPresent() && objectSummaryLastModified.equals(fileAlreadyExist.get().getLast_modified())){
+                        files.add(fileAlreadyExist.get());
+                    }else{
+                        files.add(downloadAndMapEntities(bucketName,key,objectSummaryLastModified));
+                    }
                 }
             }
         }
         return files;
     }
-    public FileDetails downloadAndMapEntities(String bucketName, String key) {
+    public FileDetails downloadAndMapEntities(String bucketName, String key,Date lastModified) {
         try {
             S3Object s3Object = s3Client.getObject(new GetObjectRequest(bucketName, key));
 
@@ -110,33 +123,79 @@ public class FileStorageService {
                 deviceRepository.save(event.getDevice());
             }
             eventRepository.save(event);
-            return fileDetailsRepository.save(new FileDetails(key,event.getId(),"https://"+bucketName+".s3.amazonaws.com/"+key));
+            return fileDetailsRepository.save(new FileDetails(key,event.getId(),"https://"+bucketName+".s3.amazonaws.com/"+key,lastModified));
         } catch (IOException e) {
-            return fileDetailsRepository.save(new FileDetails(key, (long) -1,"https://"+bucketName+".s3.amazonaws.com/"+key));
+            return fileDetailsRepository.save(new FileDetails(key, (long) -1,"https://"+bucketName+".s3.amazonaws.com/"+key,lastModified));
         }
     }
-    public Event getFileData(Long id){
+    public EventDTO getFileData(Long id){
         Optional<FileDetails> file = fileDetailsRepository.findById(id.intValue());
         if(file.isPresent()){
             if(file.get().getEvent_id()!=-1){
-                Event res = new Event();
+                EventDTO eventDTO = new EventDTO();
                 Optional<Event> event = eventRepository.findById(file.get().getEvent_id());
                 if(event.isPresent()){
-                    res.setId(event.get().getId());
-                    res.setCompany(event.get().getCompany());
-                    res.setDevice(event.get().getDevice());
-                    res.setLocation(event.get().getLocation());
-                    res.setDevice_type(event.get().getDevice_type());
-                    res.setEvent_type(event.get().getEvent_type());
-                    res.setEvent_data(event.get().getEvent_data());
-                    res.getEvent_data().setGateways(null);
-                    res.getEvent_data().setPayload(null);
+                    eventDTO.setId(event.get().getId());
+                    eventDTO.setCompany(event.get().getCompany());
+                    eventDTO.setDevice(event.get().getDevice());
+                    eventDTO.setLocation(event.get().getLocation());
+                    eventDTO.setDevice_type(event.get().getDevice_type());
+                    eventDTO.setEvent_type(event.get().getEvent_type());
+                    eventDTO.setEvent_data(convertEventDataToDTO(event.get().getEvent_data()));
                 }
-                return res;
-            }else{
-                return null;
+                return eventDTO;
             }
         }
         return null;
+    }
+    public EventDataDTO convertEventDataToDTO(EventData eventData) {
+        EventDataDTO eventDataDTO = new EventDataDTO();
+        eventDataDTO.setId(eventData.getId());
+        eventDataDTO.setCorrelation_id(eventData.getCorrelation_id());
+        eventDataDTO.setDevice_id(eventData.getDevice_id());
+        eventDataDTO.setUser_id(eventData.getUser_id());
+        List<SensorReadingDTO> sensorReadingDTOs = eventData.getPayload().stream()
+                .filter(sensorReading -> sensorReading.getTimestamp() <= eventData.getTimestamp())
+                .map(this::convertSensorReadingToDTO)
+                .collect(Collectors.toList());
+        eventDataDTO.setPayload(sensorReadingDTOs);
+
+        List<GatewayDTO> gatewayDTOs = eventData.getGateways().stream()
+                .map(this::convertGatewayToDTO)
+                .collect(Collectors.toList());
+        eventDataDTO.setGateways(gatewayDTOs);
+        eventDataDTO.setFcnt(eventData.getFcnt());
+        eventDataDTO.setFport(eventData.getFport());
+        eventDataDTO.setRaw_format(eventData.getRaw_format());
+        eventDataDTO.setRaw_payload(eventData.getRaw_payload());
+        eventDataDTO.setClient_id(eventData.getClient_id());
+        eventDataDTO.setHardware_id(eventData.getHardware_id());
+        eventDataDTO.setTimestamp(eventData.getTimestamp());
+        eventDataDTO.setApplication_id(eventData.getApplication_id());
+        eventDataDTO.setDevice_type_id(eventData.getDevice_type_id());
+        eventDataDTO.setLora_datarate(eventData.getLora_datarate());
+        eventDataDTO.setFreq(eventData.getFreq());
+        return eventDataDTO;
+    }
+    private SensorReadingDTO convertSensorReadingToDTO(SensorReading sensorReading) {
+        SensorReadingDTO sensorReadingDTO = new SensorReadingDTO();
+        sensorReadingDTO.setId(sensorReading.getId());
+        sensorReadingDTO.setName(sensorReading.getName());
+        sensorReadingDTO.setSensor_id(sensorReading.getSensor_id());
+        sensorReadingDTO.setType(sensorReading.getType());
+        sensorReadingDTO.setUnit(sensorReading.getUnit());
+        sensorReadingDTO.setValue(sensorReading.getValue());
+        sensorReadingDTO.setChannel(sensorReading.getChannel());
+        sensorReadingDTO.setTimestamp(sensorReading.getTimestamp());
+        return sensorReadingDTO;
+    }
+    private GatewayDTO convertGatewayToDTO(Gateway gateway) {
+        GatewayDTO gatewayDTO = new GatewayDTO();
+        gatewayDTO.setId(gateway.getId());
+        gatewayDTO.setGweui(gateway.getGweui());
+        gatewayDTO.setTime(gateway.getTime());
+        gatewayDTO.setRssi(gateway.getRssi());
+        gatewayDTO.setSnr(gateway.getSnr());
+        return gatewayDTO;
     }
 }

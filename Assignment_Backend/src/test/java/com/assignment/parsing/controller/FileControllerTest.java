@@ -1,6 +1,6 @@
 package com.assignment.parsing.controller;
 
-import com.assignment.parsing.entity.Event;
+import com.assignment.parsing.dto.EventDTO;
 import com.assignment.parsing.entity.FileDetails;
 import com.assignment.parsing.service.FileStorageService;
 import org.junit.jupiter.api.Test;
@@ -64,11 +64,11 @@ class FileControllerTest {
 
     @Test
     public void testGetFileData() {
-        Event mockEvent = new Event();
+        EventDTO mockEvent = new EventDTO();
         mockEvent.setId(1L);
         when(fileStorageService.getFileData(anyLong())).thenReturn(mockEvent);
 
-        Event retrievedEvent = fileController.getFileData(1L);
+        EventDTO retrievedEvent = fileController.getFileData(1L);
 
         assertNotNull(retrievedEvent);
         assertEquals(mockEvent, retrievedEvent);

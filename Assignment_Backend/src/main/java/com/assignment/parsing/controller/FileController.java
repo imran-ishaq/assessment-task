@@ -1,5 +1,6 @@
 package com.assignment.parsing.controller;
 
+import com.assignment.parsing.dto.EventDTO;
 import com.assignment.parsing.entity.Event;
 import com.assignment.parsing.entity.FileDetails;
 import com.assignment.parsing.service.FileStorageService;
@@ -33,7 +34,7 @@ public class FileController {
         return fileStorageService.getFileDetails();
     }
     @GetMapping("/data/{id}")
-    public Event getFileData(@PathVariable("id") Long id) {
+    public EventDTO getFileData(@PathVariable("id") Long id) {
         return fileStorageService.getFileData(id);
     }
 }
