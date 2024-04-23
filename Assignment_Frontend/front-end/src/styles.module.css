@@ -9,22 +9,22 @@
 
 .fileSelection {
   display: flex;
-  flex-direction: column; /* Stacks elements vertically */
-  border: 1px solid #ddd; /* Creates a border around the box */
-  border-radius: 4px; /* Rounded corners for the box */
-  padding: 10px; /* Adds padding inside the box */
-  background-color: #bdcdd6; /* Light background color for the box */
-  width: fit-content; /* Adjusts width to content (optional) */
+  flex-direction: column;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #bdcdd6;
+  width: fit-content;
 }
 
 .fileInput {
-  flex: 1; /* Fills available space within the box */
+  flex: 1;
   padding: 10px 20px;
-  border: 1px solid #ccc; /* Individual border for the input field */
+  border: 1px solid #ccc;
   border-radius: 4px;
-  background-color: #fff; /* White background for the input field */
+  background-color: #fff;
   cursor: pointer;
-  margin-bottom: 10px; /* Adds spacing between input and buttons */
+  margin-bottom: 10px;
 }
 
 .uploadButton,

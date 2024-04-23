@@ -1,6 +1,8 @@
 import React from "react";
 import styles from "./styles.module.css";
-
+{
+  /*Display data fetched for a particular file in a table*/
+}
 const FileDataViewer = ({ data }) => {
   return (
     <div>

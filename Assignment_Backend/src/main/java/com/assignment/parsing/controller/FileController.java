@@ -1,7 +1,6 @@
 package com.assignment.parsing.controller;
 
 import com.assignment.parsing.dto.EventDTO;
-import com.assignment.parsing.entity.Event;
 import com.assignment.parsing.entity.FileDetails;
 import com.assignment.parsing.service.FileStorageService;
 import org.springframework.beans.factory.annotation.Autowired;

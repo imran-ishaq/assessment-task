@@ -8,6 +8,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 
 public interface FileDetailsRepository extends JpaRepository<FileDetails,Integer> {
-    @Query("SELECT f FROM FileDetails f WHERE f.name = :name ORDER BY f.last_modified DESC")
-    Optional<FileDetails> findLatestByName(@Param("name") String name);
+    @Query("SELECT f FROM FileDetails f WHERE f.name = :name ORDER BY f.last_modified DESC LIMIT 1")
+    Optional<FileDetails> findLatestByName(@Param("name") String name);                 // This method retrieves the details of latest file from the db.
 }

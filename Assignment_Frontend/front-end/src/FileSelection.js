@@ -6,11 +6,13 @@ import FileList from "./FileList";
 const FileSelection = () => {
   const [file, setFile] = useState(null);
   const [fetchedFileDetails, setFetchedFileDetails] = useState([]);
-  const [isLoadingFetch, setIsLoadingFetch] = useState(false); // New state for fetching spinner
-  const [isLoadingUpload, setIsLoadingUpload] = useState(false); // New state for upload spinner
-
+  const [isLoadingFetch, setIsLoadingFetch] = useState(false);
+  const [isLoadingUpload, setIsLoadingUpload] = useState(false);
+  {
+    /*The following function fetch all the file details stored in my s3 bucket*/
+  }
   const fetchFilesFromS3 = async () => {
-    setIsLoadingFetch(true); // Start fetch spinner
+    setIsLoadingFetch(true);
     try {
       const response = await axios.get("http://localhost:8080/api/file/fetch");
       if (response.data.length === 0) {
@@ -21,21 +23,28 @@ const FileSelection = () => {
       console.error("Error fetching file Details from S3:", error);
       alert("Error fetching file Details from S3");
     } finally {
-      setIsLoadingFetch(false); // Stop fetch spinner
+      setIsLoadingFetch(false);
     }
   };
-
+  {
+    /*Handles the file name being changed when a file is choosen*/
+  }
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
-
+  {
+    /*Handle that a file must be choosen and then upload it to s3 bucket via api*/
+  }
   const handleUpload = async () => {
-    if (!file) {
-      alert("Please select a file");
+    const fileName = file.name;
+    const fileExtension = fileName.split(".").pop(); // Extract file extension
+
+    if (!file || fileExtension.toLowerCase() !== "json") {
+      alert("Please select a file or file is not json");
       return;
     }
 
-    setIsLoadingUpload(true); // Start upload spinner
+    setIsLoadingUpload(true);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -52,12 +61,13 @@ const FileSelection = () => {
 
       console.log("File uploaded successfully:", response.data);
       alert("File uploaded successfully");
+      setFile(null);
       document.getElementById("input").value = "";
     } catch (error) {
       console.error("Error uploading file:", error);
       alert("Error uploading file");
     } finally {
-      setIsLoadingUpload(false); // Stop upload spinner
+      setIsLoadingUpload(false);
     }
   };
 
@@ -74,14 +84,14 @@ const FileSelection = () => {
         <button
           onClick={handleUpload}
           className={styles.uploadButton}
-          disabled={isLoadingUpload || isLoadingFetch} // Disable upload button when loading
+          disabled={isLoadingUpload || isLoadingFetch}
         >
           {isLoadingUpload ? "Uploading..." : "Upload"}
         </button>
         <button
           onClick={fetchFilesFromS3}
           className={styles.fetchButton}
-          disabled={isLoadingFetch || isLoadingUpload} // Disable fetch button when loading
+          disabled={isLoadingFetch || isLoadingUpload}
         >
           {isLoadingFetch ? "Fetching..." : "Fetch Files"}
         </button>

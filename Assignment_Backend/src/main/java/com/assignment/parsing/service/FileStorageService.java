@@ -1,13 +1,17 @@
 package com.assignment.parsing.service;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.model.*;
+import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectListing;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
 import com.assignment.parsing.dto.EventDTO;
-import com.assignment.parsing.dto.EventDataDTO;
-import com.assignment.parsing.dto.GatewayDTO;
-import com.assignment.parsing.dto.SensorReadingDTO;
-import com.assignment.parsing.entity.*;
+import com.assignment.parsing.entity.Event;
+import com.assignment.parsing.entity.FileDetails;
+import com.assignment.parsing.entity.Gateway;
+import com.assignment.parsing.entity.SensorReading;
 import com.assignment.parsing.repository.*;
+import com.assignment.parsing.utils.EventDataMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,9 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 public class FileStorageService {
@@ -41,6 +43,8 @@ public class FileStorageService {
     private GatewayRepository gatewayRepository;
     @Autowired
     private FileDetailsRepository fileDetailsRepository;
+    @Autowired
+    private EventDataMapper eventDataMapper;
 
     @Value("${aws.s3.bucketName}")
     private String bucketName;
@@ -51,34 +55,49 @@ public class FileStorageService {
         this.s3Client = s3Client;
     }
 
+    /*
+        storeFile() method takes a Multipart file sent via front end
+        and convert it to a temp File before uploading it to s3bucket
+        and finally after uploading it successfully deletes temp file.
+    */
+
     public void storeFile(MultipartFile file) throws IOException {
-        File tempFile = this.convertMultiPartToFile(file);
+        File tempFile = this.convertMultiPartFileToFile(file);  //create temp file in required format for s3 bucket to accept
         try {
-            s3Client.putObject(bucketName, file.getOriginalFilename(), tempFile);
+            s3Client.putObject(bucketName, file.getOriginalFilename(), tempFile);  //Store temp file to s3 bucket
         } finally {
-            tempFile.delete();
+            tempFile.delete();          //delete temp file
         }
     }
-    private File convertMultiPartToFile(MultipartFile file) throws IOException {
+    private File convertMultiPartFileToFile(MultipartFile file) throws IOException {
         File convFile = new File(Objects.requireNonNull(file.getOriginalFilename()));
         FileOutputStream fos = new FileOutputStream(convFile);
         fos.write(file.getBytes());
         fos.close();
         return convFile;
     }
+
+    /*
+        getFileDetails() method fetch list of all objects that are present in s3bucket
+        and then for each file fetched, it downloads,parse and save the file in db via downloadAndMapEntities()
+        and finally returns a list of details about all files fetched and parsed.
+    */
+
     public List<FileDetails> getFileDetails() {
-        ObjectListing objectListing = s3Client.listObjects(bucketName);
+        ObjectListing objectListing = s3Client.listObjects(bucketName);     //list details about files stored in s# bucket
         List<FileDetails> files = new ArrayList<>();
         if (objectListing != null) {
             List<S3ObjectSummary> s3ObjectSummariesList = objectListing.getObjectSummaries();
             if (!s3ObjectSummariesList.isEmpty()) {
                 for (S3ObjectSummary objectSummary : s3ObjectSummariesList) {
-                    String key = objectSummary.getKey();
-                    Date objectSummaryLastModified = objectSummary.getLastModified();
-                    Optional<FileDetails> fileAlreadyExist = fileDetailsRepository.findLatestByName(key);
+                    String key = objectSummary.getKey();                    // get filename for each file
+                    Date objectSummaryLastModified = objectSummary.getLastModified();   // get last modified time for each file
+                    Optional<FileDetails> fileAlreadyExist = fileDetailsRepository.findLatestByName(key);   //get latest file details from DB based on fetched file name from s3 bucket
                     if(fileAlreadyExist.isPresent() && objectSummaryLastModified.equals(fileAlreadyExist.get().getLast_modified())){
+                        //if last modified time of details from s3 bucket is same as of db's last modified time mean, no change in file and no need to download it again
                         files.add(fileAlreadyExist.get());
                     }else{
+                        //else download the file if it's changed or do not exist in db
                         files.add(downloadAndMapEntities(bucketName,key,objectSummaryLastModified));
                     }
                 }
@@ -86,13 +105,21 @@ public class FileStorageService {
         }
         return files;
     }
+
+    /*
+        downloadAndMapEntites() method downloads file mentioned via key parameter form s3 bucket
+        and then parse it via object mapper and if file has correct format and is parsed correctly,
+        it saves the data for each entity in their respective tables and at the end store the details
+        of file being parsed in file_details table.
+    */
+
     public FileDetails downloadAndMapEntities(String bucketName, String key,Date lastModified) {
         try {
-            S3Object s3Object = s3Client.getObject(new GetObjectRequest(bucketName, key));
+            S3Object s3Object = s3Client.getObject(new GetObjectRequest(bucketName, key)); //download file from s3 bucket with given key name
 
-            Event event = objectMapper.readValue(s3Object.getObjectContent(), Event.class);
+            Event event = objectMapper.readValue(s3Object.getObjectContent(), Event.class); // map the json file to event entity
             s3Object.close();
-
+            // save the data for each entity in a file in their respective table.
             if (event.getEvent_data() != null) {
                 eventDataRepository.save(event.getEvent_data());
                 if (event.getEvent_data().getPayload() != null) {
@@ -128,12 +155,19 @@ public class FileStorageService {
             return fileDetailsRepository.save(new FileDetails(key, (long) -1,"https://"+bucketName+".s3.amazonaws.com/"+key,lastModified));
         }
     }
+
+    /*
+        getFileData() method retrieve file details from the repository
+        and then determine whether that file has valid format or not
+        and if file has valid format it displays the data of that file on front-end
+    */
+
     public EventDTO getFileData(Long id){
-        Optional<FileDetails> file = fileDetailsRepository.findById(id.intValue());
+        Optional<FileDetails> file = fileDetailsRepository.findById(id.intValue()); //check if the details for required file exist in db
         if(file.isPresent()){
-            if(file.get().getEvent_id()!=-1){
+            if(file.get().getEvent_id()!=-1){   // if for the required file event id is not -1 means it has been parsed correctly and its data exist in db
                 EventDTO eventDTO = new EventDTO();
-                Optional<Event> event = eventRepository.findById(file.get().getEvent_id());
+                Optional<Event> event = eventRepository.findById(file.get().getEvent_id());     // retrieve data related to required file
                 if(event.isPresent()){
                     eventDTO.setId(event.get().getId());
                     eventDTO.setCompany(event.get().getCompany());
@@ -141,61 +175,11 @@ public class FileStorageService {
                     eventDTO.setLocation(event.get().getLocation());
                     eventDTO.setDevice_type(event.get().getDevice_type());
                     eventDTO.setEvent_type(event.get().getEvent_type());
-                    eventDTO.setEvent_data(convertEventDataToDTO(event.get().getEvent_data()));
+                    eventDTO.setEvent_data(eventDataMapper.convertEventDataToDTO(event.get().getEvent_data()));
                 }
-                return eventDTO;
+                return eventDTO;    // return data of required file
             }
         }
-        return null;
-    }
-    public EventDataDTO convertEventDataToDTO(EventData eventData) {
-        EventDataDTO eventDataDTO = new EventDataDTO();
-        eventDataDTO.setId(eventData.getId());
-        eventDataDTO.setCorrelation_id(eventData.getCorrelation_id());
-        eventDataDTO.setDevice_id(eventData.getDevice_id());
-        eventDataDTO.setUser_id(eventData.getUser_id());
-        List<SensorReadingDTO> sensorReadingDTOs = eventData.getPayload().stream()
-                .filter(sensorReading -> sensorReading.getTimestamp() <= eventData.getTimestamp())
-                .map(this::convertSensorReadingToDTO)
-                .collect(Collectors.toList());
-        eventDataDTO.setPayload(sensorReadingDTOs);
-
-        List<GatewayDTO> gatewayDTOs = eventData.getGateways().stream()
-                .map(this::convertGatewayToDTO)
-                .collect(Collectors.toList());
-        eventDataDTO.setGateways(gatewayDTOs);
-        eventDataDTO.setFcnt(eventData.getFcnt());
-        eventDataDTO.setFport(eventData.getFport());
-        eventDataDTO.setRaw_format(eventData.getRaw_format());
-        eventDataDTO.setRaw_payload(eventData.getRaw_payload());
-        eventDataDTO.setClient_id(eventData.getClient_id());
-        eventDataDTO.setHardware_id(eventData.getHardware_id());
-        eventDataDTO.setTimestamp(eventData.getTimestamp());
-        eventDataDTO.setApplication_id(eventData.getApplication_id());
-        eventDataDTO.setDevice_type_id(eventData.getDevice_type_id());
-        eventDataDTO.setLora_datarate(eventData.getLora_datarate());
-        eventDataDTO.setFreq(eventData.getFreq());
-        return eventDataDTO;
-    }
-    private SensorReadingDTO convertSensorReadingToDTO(SensorReading sensorReading) {
-        SensorReadingDTO sensorReadingDTO = new SensorReadingDTO();
-        sensorReadingDTO.setId(sensorReading.getId());
-        sensorReadingDTO.setName(sensorReading.getName());
-        sensorReadingDTO.setSensor_id(sensorReading.getSensor_id());
-        sensorReadingDTO.setType(sensorReading.getType());
-        sensorReadingDTO.setUnit(sensorReading.getUnit());
-        sensorReadingDTO.setValue(sensorReading.getValue());
-        sensorReadingDTO.setChannel(sensorReading.getChannel());
-        sensorReadingDTO.setTimestamp(sensorReading.getTimestamp());
-        return sensorReadingDTO;
-    }
-    private GatewayDTO convertGatewayToDTO(Gateway gateway) {
-        GatewayDTO gatewayDTO = new GatewayDTO();
-        gatewayDTO.setId(gateway.getId());
-        gatewayDTO.setGweui(gateway.getGweui());
-        gatewayDTO.setTime(gateway.getTime());
-        gatewayDTO.setRssi(gateway.getRssi());
-        gatewayDTO.setSnr(gateway.getSnr());
-        return gatewayDTO;
+        return null;        // no data exist or file not parsed correctly
     }
 }

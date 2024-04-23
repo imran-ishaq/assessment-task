@@ -6,6 +6,9 @@ import FileDataViewer from "./FileDataViewer";
 const FileList = ({ files }) => {
   const [showdata, setShowData] = useState(false);
   const [FileData, setFileData] = useState({});
+  {
+    /*The following function fetch all the data from api for the file whose view button is pressed*/
+  }
   const handleViewButtonClick = async (id) => {
     try {
       const response = await axios.get(
@@ -23,6 +26,9 @@ const FileList = ({ files }) => {
       alert("Error fetching file data");
     }
   };
+  {
+    /*Display the file details fetched earlier and a view button to view them*/
+  }
   return (
     <div className={styles.fileList}>
       <table>
