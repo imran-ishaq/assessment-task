@@ -13,7 +13,6 @@ import com.assignment.parsing.entity.SensorReading;
 import com.assignment.parsing.repository.*;
 import com.assignment.parsing.utils.EventDataMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -25,34 +24,36 @@ import java.util.*;
 
 @Service
 public class FileStorageService {
-    @Autowired
-    private EventRepository eventRepository;
-    @Autowired
-    private EventDataRepository eventDataRepository;
-    @Autowired
-    private DeviceRepository deviceRepository;
-    @Autowired
-    private DeviceTypeRepository deviceTypeRepository;
-    @Autowired
-    private CompanyRepository companyRepository;
-    @Autowired
-    private LocationRepository locationRepository;
-    @Autowired
-    private SensorReadingRepository sensorReadingRepository;
-    @Autowired
-    private GatewayRepository gatewayRepository;
-    @Autowired
-    private FileDetailsRepository fileDetailsRepository;
-    @Autowired
-    private EventDataMapper eventDataMapper;
+    private final EventRepository eventRepository;
+    private final EventDataRepository eventDataRepository;
+    private final DeviceRepository deviceRepository;
+    private final DeviceTypeRepository deviceTypeRepository;
+    private final CompanyRepository companyRepository;
+    private final LocationRepository locationRepository;
+    private final SensorReadingRepository sensorReadingRepository;
+    private final GatewayRepository gatewayRepository;
+    private final FileDetailsRepository fileDetailsRepository;
+    private final EventDataMapper eventDataMapper;
 
     @Value("${aws.s3.bucketName}")
     private String bucketName;
     private final AmazonS3 s3Client;
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    public FileStorageService(AmazonS3 s3Client) {
+
+
+    public FileStorageService(AmazonS3 s3Client, EventRepository eventRepository, EventDataRepository eventDataRepository, DeviceRepository deviceRepository, DeviceTypeRepository deviceTypeRepository, CompanyRepository companyRepository, LocationRepository locationRepository, SensorReadingRepository sensorReadingRepository, GatewayRepository gatewayRepository, FileDetailsRepository fileDetailsRepository, EventDataMapper eventDataMapper) {
         this.s3Client = s3Client;
+        this.eventRepository = eventRepository;
+        this.eventDataRepository = eventDataRepository;
+        this.deviceRepository = deviceRepository;
+        this.deviceTypeRepository = deviceTypeRepository;
+        this.companyRepository = companyRepository;
+        this.locationRepository = locationRepository;
+        this.sensorReadingRepository = sensorReadingRepository;
+        this.gatewayRepository = gatewayRepository;
+        this.fileDetailsRepository = fileDetailsRepository;
+        this.eventDataMapper = eventDataMapper;
     }
 
     /*
@@ -62,14 +63,14 @@ public class FileStorageService {
     */
 
     public void storeFile(MultipartFile file) throws IOException {
-        File tempFile = this.convertMultiPartFileToFile(file);  //create temp file in required format for s3 bucket to accept
+        File tempFile = convertMultiPartFileToFile(file);  //create temp file in required format for s3 bucket to accept
         try {
             s3Client.putObject(bucketName, file.getOriginalFilename(), tempFile);  //Store temp file to s3 bucket
         } finally {
             tempFile.delete();          //delete temp file
         }
     }
-    private File convertMultiPartFileToFile(MultipartFile file) throws IOException {
+    public File convertMultiPartFileToFile(MultipartFile file) throws IOException {
         File convFile = new File(Objects.requireNonNull(file.getOriginalFilename()));
         FileOutputStream fos = new FileOutputStream(convFile);
         fos.write(file.getBytes());

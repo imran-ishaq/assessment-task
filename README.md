@@ -25,7 +25,7 @@ Before running the application, ensure you have the following prerequisites inst
 
 - **Java Development Kit (JDK)**: Ensure you have Java Development Kit (JDK) version 8 or higher installed on your system.
 - **Node.js and npm**: You need Node.js and npm (Node Package Manager) to run the frontend application. You can download and install them from [Node.js website](https://nodejs.org/).
-- **PostgreSQL Database**: You should have PostgreSQL installed either locally or in a Docker container. The database should have a schema named `postgres`.
+- **PostgreSQL Database**: You should have PostgreSQL installed either locally or in a Docker container. The database should have a schema named `assignmentTask`.
 
 ### Installing PostgreSQL Locally
 
