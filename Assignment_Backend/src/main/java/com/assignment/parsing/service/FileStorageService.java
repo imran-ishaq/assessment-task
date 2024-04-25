@@ -13,6 +13,7 @@ import com.assignment.parsing.entity.SensorReading;
 import com.assignment.parsing.repository.*;
 import com.assignment.parsing.utils.EventDataMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -21,7 +22,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.*;
-
+@Slf4j
 @Service
 public class FileStorageService {
     private final EventRepository eventRepository;
@@ -58,15 +59,19 @@ public class FileStorageService {
 
     /*
         storeFile() method takes a Multipart file sent via front end
-        and convert it to a temp File before uploading it to s3bucket
+        and convert it to a temp File before uploading it to s3 bucket
         and finally after uploading it successfully deletes temp file.
     */
 
     public void storeFile(MultipartFile file) throws IOException {
+        log.info("Creating a temp file from Multipart file for sending it to s3 bucket via convertMultiPartFiletoFile(file).");
         File tempFile = convertMultiPartFileToFile(file);  //create temp file in required format for s3 bucket to accept
         try {
+            log.info("Uploading File: {} to s3 bucket: {}.",file.getOriginalFilename(),bucketName);
             s3Client.putObject(bucketName, file.getOriginalFilename(), tempFile);  //Store temp file to s3 bucket
+            log.info("File: {} Uploaded Successfully to s3 bucket: {}.",file.getOriginalFilename(),bucketName);
         } finally {
+            log.info("Deleting temp file created earlier via convertMultiPartFiletoFile(file).");
             tempFile.delete();          //delete temp file
         }
     }
@@ -85,6 +90,7 @@ public class FileStorageService {
     */
 
     public List<FileDetails> getFileDetails() {
+        log.info("Fetching list of objects in s3 bucket: {} via s3Client.",bucketName);
         ObjectListing objectListing = s3Client.listObjects(bucketName);     //list details about files stored in s# bucket
         List<FileDetails> files = new ArrayList<>();
         if (objectListing != null) {
@@ -93,15 +99,21 @@ public class FileStorageService {
                 for (S3ObjectSummary objectSummary : s3ObjectSummariesList) {
                     String key = objectSummary.getKey();                    // get filename for each file
                     Date objectSummaryLastModified = objectSummary.getLastModified();   // get last modified time for each file
+                    log.info("File found in s3 bucket: file = {} and last modified = {}.",key,objectSummaryLastModified);
                     Optional<FileDetails> fileAlreadyExist = fileDetailsRepository.findLatestByName(key);   //get latest file details from DB based on fetched file name from s3 bucket
                     if(fileAlreadyExist.isPresent() && objectSummaryLastModified.equals(fileAlreadyExist.get().getLast_modified())){
                         //if last modified time of details from s3 bucket is same as of db's last modified time mean, no change in file and no need to download it again
+                        log.info("Details of : {} are already present in DB and not modified yet.",key);
                         files.add(fileAlreadyExist.get());
                     }else{
                         //else download the file if it's changed or do not exist in db
+                        log.info("Details of : {} not found in DB.",key);
+                        log.info("Calling downloadAndMapEntites() for file: {}.",key);
                         files.add(downloadAndMapEntities(bucketName,key,objectSummaryLastModified));
                     }
                 }
+            }else{
+                log.info("No file is found in s3 Bucket: {}.",bucketName);
             }
         }
         return files;
@@ -116,10 +128,18 @@ public class FileStorageService {
 
     public FileDetails downloadAndMapEntities(String bucketName, String key,Date lastModified) {
         try {
+            log.info("Fetching the file from s3 bucket via s3Client.getObject().");
             S3Object s3Object = s3Client.getObject(new GetObjectRequest(bucketName, key)); //download file from s3 bucket with given key name
+            log.info("File: {} fetched successfully from bucket: {}.",key,bucketName);
 
+            log.info("Mapping fetched file content to Event entity.");
             Event event = objectMapper.readValue(s3Object.getObjectContent(), Event.class); // map the json file to event entity
+            log.info("File: {} mapped successfully to the entity.",key);
+
             s3Object.close();
+
+            log.info("Saving Event Entity to DB for file: {}.",key);
+
             // save the data for each entity in a file in their respective table.
             if (event.getEvent_data() != null) {
                 eventDataRepository.save(event.getEvent_data());
@@ -151,8 +171,11 @@ public class FileStorageService {
                 deviceRepository.save(event.getDevice());
             }
             eventRepository.save(event);
+
+            log.info("File: {} is fetched, parsed and saved to DB.",key);
             return fileDetailsRepository.save(new FileDetails(key,event.getId(),"https://"+bucketName+".s3.amazonaws.com/"+key,lastModified));
         } catch (IOException e) {
+            log.error("File: {} fetched from s3 bucket is in wrong format and cannot be parsed.",key);
             return fileDetailsRepository.save(new FileDetails(key, (long) -1,"https://"+bucketName+".s3.amazonaws.com/"+key,lastModified));
         }
     }
@@ -164,9 +187,16 @@ public class FileStorageService {
     */
 
     public EventDTO getFileData(Long id){
+        log.info("Get file details from DB for Id: {}.",id);
         Optional<FileDetails> file = fileDetailsRepository.findById(id.intValue()); //check if the details for required file exist in db
+
         if(file.isPresent()){
+            log.info("File details fetched from DB for Id: {}.",id);
+
             if(file.get().getEvent_id()!=-1){   // if for the required file event id is not -1 means it has been parsed correctly and its data exist in db
+
+                log.info("Fetching file data from DB: file = {}, id = {}.",file.get().getName(),id);
+
                 EventDTO eventDTO = new EventDTO();
                 Optional<Event> event = eventRepository.findById(file.get().getEvent_id());     // retrieve data related to required file
                 if(event.isPresent()){
@@ -178,9 +208,12 @@ public class FileStorageService {
                     eventDTO.setEvent_type(event.get().getEvent_type());
                     eventDTO.setEvent_data(eventDataMapper.convertEventDataToDTO(event.get().getEvent_data()));
                 }
+                log.info("Fetched file data from DB: file =  {}, id = {}.",file.get().getName(),id);
                 return eventDTO;    // return data of required file
             }
+            log.info("Wrong Format: file =  {}, id = {}.",file.get().getName(),id);
         }
+        log.info("Data Not Found for fileId: {}.",id);
         return null;        // no data exist or file not parsed correctly
     }
 }
