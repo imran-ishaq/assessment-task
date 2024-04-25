@@ -10,6 +10,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -28,9 +29,13 @@ class FileControllerTest {
 
     @Test
     public void testUploadFileSuccess() throws IOException {
+        byte[] fileContent = "Mock file content".getBytes();
+        MockMultipartFile multipartFile = new MockMultipartFile(
+                "file", "test.json", "application/json", fileContent);
+
         doNothing().when(fileStorageService).storeFile(any());
 
-        ResponseEntity<String> response = fileController.uploadFile(null);
+        ResponseEntity<String> response = fileController.uploadFile(multipartFile);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("File uploaded successfully", response.getBody());
@@ -40,9 +45,13 @@ class FileControllerTest {
 
     @Test
     public void testUploadFileFailure() throws IOException {
+        byte[] fileContent = "Mock file content".getBytes();
+        MockMultipartFile multipartFile = new MockMultipartFile(
+                "file", "test.json", "application/json", fileContent);
+
         doThrow(IOException.class).when(fileStorageService).storeFile(any());
 
-        ResponseEntity<String> response = fileController.uploadFile(null);
+        ResponseEntity<String> response = fileController.uploadFile(multipartFile);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("Failed to upload file", response.getBody());
